@@ -18,27 +18,75 @@ $today = date("Y-m-d");
 $cli_success = true;
 
 if ($since != $today) {
-    $out = `node_modules/@ghuser/github-contribs/cli.js --since {$since} KovuTheHusky 2>&1`;
+    $has_next_page = true;
+    $cursor = null;
 
-    if (empty(trim($out)) || stripos($out, "error") !== false) {
-        error_log(
-            "GitHub Contribs CLI failed or returned empty/error: " . $out,
-        );
-        $cli_success = false;
-    } else {
-        $separator = "\r\n";
-        $line = strtok($out, $separator);
-
-        while ($line !== false) {
-            if (
-                strpos($line, "/") !== false &&
-                !in_array($line, $json->contributions)
-            ) {
-                $json->contributions[] = $line;
+    while ($has_next_page) {
+        $query = 'query($cursor: String) {
+          user(login: "KovuTheHusky") {
+            repositoriesContributedTo(first: 100, after: $cursor, contributionTypes: [COMMIT, ISSUE, PULL_REQUEST, REPOSITORY], includeUserRepositories: true) {
+              nodes {
+                nameWithOwner
+              }
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
             }
-            $line = strtok($separator);
-        }
+          }
+        }';
 
+        $payload = json_encode([
+            "query" => $query,
+            "variables" => ["cursor" => $cursor],
+        ]);
+
+        $ch_gql = curl_init("https://api.github.com/graphql");
+        curl_setopt($ch_gql, CURLOPT_HTTPHEADER, [
+            "Content-Type: application/json",
+            "Authorization: bearer " . GITHUB_SECRET,
+            "User-Agent: PHP",
+        ]);
+        curl_setopt($ch_gql, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch_gql, CURLOPT_POST, true);
+        curl_setopt($ch_gql, CURLOPT_POSTFIELDS, $payload);
+
+        $response_gql = curl_exec($ch_gql);
+        $http_code_gql = curl_getinfo($ch_gql, CURLINFO_HTTP_CODE);
+        curl_close($ch_gql);
+
+        if ($response_gql && $http_code_gql == 200) {
+            $data = json_decode($response_gql, true);
+
+            if (isset($data["data"]["user"]["repositoriesContributedTo"])) {
+                $repoData = $data["data"]["user"]["repositoriesContributedTo"];
+
+                foreach ($repoData["nodes"] as $node) {
+                    $repoName = $node["nameWithOwner"];
+
+                    if (!in_array($repoName, $json->contributions)) {
+                        $json->contributions[] = $repoName;
+                    }
+                }
+
+                $has_next_page = $repoData["pageInfo"]["hasNextPage"];
+                $cursor = $repoData["pageInfo"]["endCursor"];
+            } else {
+                $has_next_page = false;
+                error_log(
+                    "GraphQL query failed to return expected structure: " .
+                        $response_gql,
+                );
+                $cli_success = false;
+            }
+        } else {
+            $has_next_page = false;
+            error_log("GraphQL request failed with HTTP $http_code_gql");
+            $cli_success = false;
+        }
+    }
+
+    if ($cli_success) {
         usort($json->contributions, function ($a, $b) {
             return strcmp(
                 explode("/", strtolower($a))[1],
