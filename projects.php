@@ -86,6 +86,45 @@ if ($since != $today) {
         }
     }
 
+    $page = 1;
+    while (true) {
+        $ch_repos = curl_init(
+            "https://api.github.com/user/repos?visibility=public&affiliation=owner,collaborator,organization_member&per_page=100&page={$page}",
+        );
+        curl_setopt($ch_repos, CURLOPT_HTTPHEADER, [
+            "Accept: application/vnd.github.v3+json",
+            "Authorization: token " . GITHUB_SECRET,
+        ]);
+        curl_setopt($ch_repos, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch_repos, CURLOPT_USERAGENT, "PHP");
+
+        $repos_response = curl_exec($ch_repos);
+        $http_code_repos = curl_getinfo($ch_repos, CURLINFO_HTTP_CODE);
+        curl_close($ch_repos);
+
+        if ($repos_response && $http_code_repos == 200) {
+            $repos_data = json_decode($repos_response);
+
+            if (empty($repos_data)) {
+                break;
+            }
+
+            foreach ($repos_data as $repo) {
+                $repoName = $repo->full_name;
+
+                if (!in_array($repoName, $json->contributions)) {
+                    $json->contributions[] = $repoName;
+                }
+            }
+            $page++;
+        } else {
+            error_log(
+                "Failed to fetch user/org repos. HTTP Code: $http_code_repos",
+            );
+            break;
+        }
+    }
+
     if ($cli_success) {
         usort($json->contributions, function ($a, $b) {
             return strcmp(
