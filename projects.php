@@ -63,6 +63,15 @@ if ($since != $today) {
 
                 foreach ($repoData["nodes"] as $node) {
                     $repoName = $node["nameWithOwner"];
+                    $parts = explode("/", $repoName);
+
+                    if (
+                        count($parts) == 2 &&
+                        (strtolower($parts[0]) === strtolower($parts[1]) ||
+                            strtolower($parts[1]) === ".github")
+                    ) {
+                        continue;
+                    }
 
                     if (!in_array($repoName, $json->contributions)) {
                         $json->contributions[] = $repoName;
@@ -94,9 +103,9 @@ if ($since != $today) {
         curl_setopt($ch_repos, CURLOPT_HTTPHEADER, [
             "Accept: application/vnd.github.v3+json",
             "Authorization: token " . GITHUB_SECRET,
+            "User-Agent: PHP",
         ]);
         curl_setopt($ch_repos, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch_repos, CURLOPT_USERAGENT, "PHP");
 
         $repos_response = curl_exec($ch_repos);
         $http_code_repos = curl_getinfo($ch_repos, CURLINFO_HTTP_CODE);
@@ -111,6 +120,15 @@ if ($since != $today) {
 
             foreach ($repos_data as $repo) {
                 $repoName = $repo->full_name;
+                $parts = explode("/", $repoName);
+
+                if (
+                    count($parts) == 2 &&
+                    (strtolower($parts[0]) === strtolower($parts[1]) ||
+                        strtolower($parts[1]) === ".github")
+                ) {
+                    continue;
+                }
 
                 if (!in_array($repoName, $json->contributions)) {
                     $json->contributions[] = $repoName;
@@ -121,6 +139,7 @@ if ($since != $today) {
             error_log(
                 "Failed to fetch user/org repos. HTTP Code: $http_code_repos",
             );
+            $cli_success = false;
             break;
         }
     }
@@ -139,19 +158,20 @@ $ch = curl_init("https://api.github.com/user/orgs");
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     "Accept: application/json",
     "Authorization: token " . GITHUB_SECRET,
+    "User-Agent: PHP",
 ]);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_USERAGENT, "PHP");
 $response = curl_exec($ch);
 $orgs = [];
 if ($response) {
-    $response = json_decode($response);
-    if (is_array($response)) {
-        foreach ($response as $org) {
+    $response_decoded = json_decode($response);
+    if (is_array($response_decoded)) {
+        foreach ($response_decoded as $org) {
             $orgs[] = $org->login;
         }
     }
 }
+curl_close($ch);
 
 $json->owned = new stdClass();
 
@@ -177,32 +197,32 @@ foreach ($json->contributions as $repo) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         "Accept: application/json",
         "Authorization: token " . GITHUB_SECRET,
+        "User-Agent: PHP",
     ]);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_USERAGENT, "PHP");
 
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
 
     if ($response && $http_code == 200) {
-        $response = json_decode($response);
+        $response_obj = json_decode($response);
 
-        $owner = $response->owner->login;
-        $name = $response->name;
-
-        $default_branch = isset($response->default_branch)
-            ? $response->default_branch
+        $owner = $response_obj->owner->login;
+        $name = $response_obj->name;
+        $default_branch = isset($response_obj->default_branch)
+            ? $response_obj->default_branch
             : "master";
 
         $project = new stdClass();
         $project->name = $name;
         $project->owner = $owner;
-        $project->description = $response->description;
-        $project->forks = $response->forks;
-        $project->stars = $response->stargazers_count;
+        $project->description = $response_obj->description;
+        $project->forks = $response_obj->forks;
+        $project->stars = $response_obj->stargazers_count;
 
         if ($owner == "KovuTheHusky" || in_array($owner, $orgs)) {
-            $homepage = $response->homepage;
+            $homepage = $response_obj->homepage;
             $homepage_text = "Visit";
             if (
                 !$homepage ||
@@ -220,11 +240,12 @@ foreach ($json->contributions as $repo) {
                 curl_setopt($ch2, CURLOPT_HTTPHEADER, [
                     "Accept: application/json",
                     "Authorization: token " . GITHUB_SECRET,
+                    "User-Agent: PHP",
                 ]);
                 curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch2, CURLOPT_USERAGENT, "PHP");
                 $response2 = curl_exec($ch2);
                 $http_code2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+                curl_close($ch2);
 
                 if ($response2 && $http_code2 == 200) {
                     $homepage =
@@ -240,7 +261,6 @@ foreach ($json->contributions as $repo) {
             }
 
             $project->source = "https://github.com/" . $repo;
-
             $slug = preg_replace("/[^a-z0-9]/", "", strtolower($name));
 
             if (
@@ -278,7 +298,7 @@ foreach ($json->contributions as $repo) {
                 $line = explode("\n", $readme_content)[0];
             }
 
-            if ($repo != "KovuTheHusky/KovuTheHusky" && $line !== "") {
+            if ($line !== "") {
                 $match = preg_match('/^#?\s*([^\[]+).*$/', $line, $matches);
                 if ($match) {
                     $project->name = trim($matches[1]);
