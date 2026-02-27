@@ -193,6 +193,16 @@ foreach ($statuses as $status) {
 $json->contributed = [];
 
 foreach ($json->contributions as $repo) {
+    $parts = explode("/", $repo);
+    if (
+        count($parts) == 2 &&
+        (strtolower($parts[0]) === strtolower($parts[1]) ||
+            strtolower($parts[1]) === ".github")
+    ) {
+        unset($json->contributions[$key]);
+        continue;
+    }
+
     $ch = curl_init("https://api.github.com/repos/" . $repo);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         "Accept: application/json",
