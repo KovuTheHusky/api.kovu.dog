@@ -66,8 +66,8 @@ if ($since != $today) {
                     $parts = explode("/", $repoName);
 
                     if (
-                        count($parts) == 2 &&
-                        (strtolower($parts[0]) === strtolower($parts[1]) ||
+                        strtolower($repoName) === "kovuthehusky/kovuthehusky" ||
+                        (count($parts) == 2 &&
                             strtolower($parts[1]) === ".github")
                     ) {
                         continue;
@@ -123,9 +123,8 @@ if ($since != $today) {
                 $parts = explode("/", $repoName);
 
                 if (
-                    count($parts) == 2 &&
-                    (strtolower($parts[0]) === strtolower($parts[1]) ||
-                        strtolower($parts[1]) === ".github")
+                    strtolower($repoName) === "kovuthehusky/kovuthehusky" ||
+                    (count($parts) == 2 && strtolower($parts[1]) === ".github")
                 ) {
                     continue;
                 }
@@ -192,12 +191,11 @@ foreach ($statuses as $status) {
 
 $json->contributed = [];
 
-foreach ($json->contributions as $repo) {
+foreach ($json->contributions as $key => $repo) {
     $parts = explode("/", $repo);
     if (
-        count($parts) == 2 &&
-        (strtolower($parts[0]) === strtolower($parts[1]) ||
-            strtolower($parts[1]) === ".github")
+        strtolower($repo) === "kovuthehusky/kovuthehusky" ||
+        (count($parts) == 2 && strtolower($parts[1]) === ".github")
     ) {
         unset($json->contributions[$key]);
         continue;
