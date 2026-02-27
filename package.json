@@ -1,10 +1,7 @@
 {
-  "type": "module",
-  "dependencies": {
-    "@ghuser/github-contribs": "^2.2.4"
-  },
   "devDependencies": {
     "@prettier/plugin-php": "^0.24.0",
     "prettier": "^3.8.1"
-  }
+  },
+  "type": "module"
 }
