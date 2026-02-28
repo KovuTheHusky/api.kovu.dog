@@ -173,6 +173,7 @@ if ($response) {
 curl_close($ch);
 
 $json->owned = new stdClass();
+$json->forked = new stdClass();
 
 $statuses = [
     "active",
@@ -187,6 +188,7 @@ $statuses = [
 ];
 foreach ($statuses as $status) {
     $json->owned->{$status} = [];
+    $json->forked->{$status} = [];
 }
 
 $json->contributed = [];
@@ -331,10 +333,17 @@ foreach ($json->contributions as $key => $repo) {
             $project->status = $status;
             $status_lower = strtolower($status);
 
-            if (!isset($json->owned->{$status_lower})) {
-                $json->owned->{$status_lower} = [];
+            if (isset($response_obj->fork) && $response_obj->fork === true) {
+                if (!isset($json->forked->{$status_lower})) {
+                    $json->forked->{$status_lower} = [];
+                }
+                $json->forked->{$status_lower}[] = $project;
+            } else {
+                if (!isset($json->owned->{$status_lower})) {
+                    $json->owned->{$status_lower} = [];
+                }
+                $json->owned->{$status_lower}[] = $project;
             }
-            $json->owned->{$status_lower}[] = $project;
         } else {
             $json->contributed[] = $project;
         }
