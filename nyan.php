@@ -1,5 +1,4 @@
 <?php
-// header("Access-Control-Allow-Origin: https://kovu.dog");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: application/json");
@@ -37,6 +36,12 @@ if (!in_array("wiggles", $colNames)) {
     $pdo->exec("ALTER TABLE users ADD COLUMN spins INTEGER DEFAULT 0");
 }
 
+$cols = $pdo->query("PRAGMA table_info(users)")->fetchAll(PDO::FETCH_ASSOC);
+$colNames = array_column($cols, "name");
+if (!in_array("last_seen", $colNames)) {
+    $pdo->exec("ALTER TABLE users ADD COLUMN last_seen INTEGER DEFAULT 0");
+}
+
 $stmt = $pdo->query("SELECT COUNT(*) FROM statistics");
 if ($stmt->fetchColumn() == 0) {
     $pdo->exec(
@@ -53,7 +58,11 @@ if ($method === "GET") {
             ->fetchAll(PDO::FETCH_ASSOC);
         $users = $pdo->query("SELECT * FROM users")->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode(
-            ["statistics" => $stats, "users" => $users],
+            [
+                "server_time" => time(),
+                "statistics" => $stats,
+                "users" => $users,
+            ],
             JSON_PRETTY_PRINT,
         );
         exit();
@@ -85,11 +94,18 @@ if ($method === "GET") {
         );
         $userStmt->execute([":username" => $username]);
         $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+
         if ($user) {
             $response["user_best"] = (float) $user["best_time"];
             $response["user_total"] = (float) $user["total_time"];
             $response["user_wiggles"] = (int) $user["wiggles"];
             $response["user_spins"] = (int) $user["spins"];
+
+            $now = time();
+            $seenStmt = $pdo->prepare(
+                "UPDATE users SET last_seen = :now WHERE username = :username",
+            );
+            $seenStmt->execute([":now" => $now, ":username" => $username]);
         }
     }
 
@@ -124,7 +140,7 @@ if ($method === "POST") {
     $updateGlobal = $pdo->prepare("
         UPDATE statistics 
         SET best_time = MAX(best_time, CAST(:best AS REAL)), 
-            total_time = total_time + CAST(:addedTime AS REAL),
+            total_time = MAX(total_time + CAST(:addedTime AS REAL), best_time, CAST(:best AS REAL)),
             wiggles = wiggles + :addedWiggles,
             spins = spins + :addedSpins
         WHERE id = 1
@@ -137,14 +153,17 @@ if ($method === "POST") {
     ]);
 
     if ($username !== "") {
+        $now = time();
+
         $updateUser = $pdo->prepare("
-            INSERT INTO users (username, best_time, total_time, wiggles, spins)
-            VALUES (:username, CAST(:best AS REAL), CAST(:addedTime AS REAL), :addedWiggles, :addedSpins)
+            INSERT INTO users (username, best_time, total_time, wiggles, spins, last_seen)
+            VALUES (:username, CAST(:best AS REAL), MAX(CAST(:addedTime AS REAL), CAST(:best AS REAL)), :addedWiggles, :addedSpins, :now)
             ON CONFLICT(username) DO UPDATE SET
                 best_time = MAX(best_time, CAST(:best AS REAL)),
-                total_time = total_time + CAST(:addedTime AS REAL),
+                total_time = MAX(total_time + CAST(:addedTime AS REAL), best_time, CAST(:best AS REAL)),
                 wiggles = wiggles + :addedWiggles,
-                spins = spins + :addedSpins
+                spins = spins + :addedSpins,
+                last_seen = :now
         ");
         $updateUser->execute([
             ":username" => $username,
@@ -152,6 +171,7 @@ if ($method === "POST") {
             ":addedTime" => $addedTime,
             ":addedWiggles" => $addedWiggles,
             ":addedSpins" => $addedSpins,
+            ":now" => $now,
         ]);
     }
 
