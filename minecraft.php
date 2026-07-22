@@ -64,11 +64,13 @@ while (true) {
             $players = $query->GetPlayers();
             $json->Players = $players ? $players : [];
 
-            $day = explode(" ", $rcon->Rcon("time query day"))[3];
-            $time = explode(" ", $rcon->Rcon("time query daytime"))[3];
-
-            $json->Day = (int) ($day + 1);
-            $json->Time = (int) $time;
+            $timeOutput = $rcon->Rcon("time query time");
+            $cleanTimeStr = preg_replace('/\xA7[0-9A-FK-OR]/i', '', $timeOutput);
+            $totalTicks = (int) preg_replace('/[^0-9]/', '', $cleanTimeStr);
+            $cleanDay = (int) floor($totalTicks / 24000);
+            $cleanTime = $totalTicks % 24000;
+            $json->Day = $cleanDay + 1;
+            $json->Time = $cleanTime;
 
             $rainingRaw = $rcon->Rcon(
                 'execute if predicate [{"condition":"minecraft:weather_check","raining":true}]',
@@ -96,7 +98,7 @@ while (true) {
                 "first_quarter",
                 "waxing_gibbous",
             ];
-            $json->Moon = $moonPhases[$day % 8];
+            $json->Moon = $moonPhases[$cleanDay % 8];
 
             $msptOutput = $rcon->Rcon("mspt");
             $msptLines = explode(PHP_EOL, $msptOutput);
