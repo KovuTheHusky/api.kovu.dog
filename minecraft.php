@@ -133,11 +133,13 @@ while (true) {
             file_put_contents("minecraft.txt", 1, LOCK_EX);
             file_put_contents("minecraft.json", json_encode($json), LOCK_EX);
         }
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         if (file_exists("minecraft.txt")) {
             unlink("minecraft.txt");
         }
         file_put_contents("minecraft.json", "", LOCK_EX);
+
+        error_log($e->getMessage());
 
         sleep(5);
     }
